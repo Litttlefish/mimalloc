@@ -46,7 +46,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.title }}-${{ matrix.build }}
+        name: compiles
         path: out/*/*/*.*
         retention-days: 3
 
