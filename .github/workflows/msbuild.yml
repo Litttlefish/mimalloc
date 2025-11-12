@@ -13,15 +13,9 @@ on:
   workflow_dispatch:
     # Inputs the workflow accepts.
     inputs:
-      name:
-        # Friendly description to be shown in the UI instead of 'name'
-        description: 'Person to greet'
-        # Default value if no value is explicitly provided
-        default: 'World'
-        # Input has to be provided for the workflow to run
+      tag_name:
+        description: 'the tag(version) of the mimalloc'
         required: true
-        # The data type of the input
-        type: string
 
 env:
   # Path to the solution file relative to the root of the project.
@@ -43,7 +37,24 @@ jobs:
     runs-on: windows-latest
 
     steps:
+
+    - name: 获得 Release 的 Body 与仓库名称
+      id: get-content
+      shell: bash
+      run: |
+        body=$(curl -s https://api.github.com/repos/aseprite/aseprite/releases/tags/${{ github.event.inputs.tag_name }} | jq -r '.body')
+        echo "body-content=$(echo $body)" >> $GITHUB_OUTPUT 
+        echo $body
+        GITHUB_REPOSITORY="${{ github.repository }}"
+        REPO_NAME="${GITHUB_REPOSITORY#${{ github.repository_owner }}/}"
+        echo "repo-name=$(echo $REPO_NAME)" >> $GITHUB_OUTPUT 
+        echo $REPO_NAME
+        
     - uses: actions/checkout@v4
+      with:
+        repository: 'microsoft/mimalloc'
+        submodules: 'recursive'
+        ref: ${{ github.event.inputs.tag_name }}
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
