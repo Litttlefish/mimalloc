@@ -42,7 +42,7 @@ jobs:
       id: get-content
       shell: bash
       run: |
-        body=$(curl -s https://api.github.com/repos/aseprite/aseprite/releases/tags/${{ github.event.inputs.tag_name }} | jq -r '.body')
+        body=$(curl -s https://api.github.com/repos/microsoft/mimalloc/releases/tags/${{ github.event.inputs.tag_name }} | jq -r '.body')
         echo "body-content=$(echo $body)" >> $GITHUB_OUTPUT 
         echo $body
         GITHUB_REPOSITORY="${{ github.repository }}"
