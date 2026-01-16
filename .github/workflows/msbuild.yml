@@ -50,14 +50,14 @@ jobs:
         echo "repo-name=$(echo $REPO_NAME)" >> $GITHUB_OUTPUT 
         echo $REPO_NAME
         
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         repository: 'microsoft/mimalloc'
         submodules: 'recursive'
         ref: ${{ github.event.inputs.tag_name }}
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.2
+      uses: microsoft/setup-msbuild@v2
 
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
