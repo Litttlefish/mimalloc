@@ -91,13 +91,22 @@ Further information:
 - \ref modes
 - \ref tools
 - \ref bench
+
+&nbsp;
+
 - \ref malloc
-- \ref extended
 - \ref aligned
-- \ref heap
 - \ref typed
+- \ref zeroinit
+
+- \ref heap
 - \ref analysis
+- \ref arenas
+- \ref subproc
+
+- \ref extended
 - \ref options
+- \ref theap
 - \ref posix
 - \ref cpp
 
@@ -380,6 +389,7 @@ void* mi_realloc_aligned_at(void* p, size_t newsize, size_t alignment, size_t of
 /// \}
 
 /// \defgroup zeroinit Zero initialized re-allocation
+/// Re-allocation of zero initialized blocks.
 ///
 /// __The zero-initialized re-allocations are only valid on memory that was
 /// originally allocated with zero initialization too,__
@@ -605,8 +615,7 @@ void* mi_heap_realloc_aligned_at(mi_heap_t* heap, void* p, size_t newsize, size_
 
 
 /// \defgroup analysis Heap Introspection
-///
-/// Inspect the heap at runtime.
+/// Walk areas and blocks of the heap at runtime.
 ///
 /// \{
 
@@ -644,7 +653,7 @@ typedef bool (mi_block_visit_fun)(const mi_heap_t* heap, const mi_heap_area_t* a
 /// @param arg Extra argument passed to \a visitor.
 /// @returns \a true if all areas and blocks were visited.
 ///
-/// Note: requires the option `mi_option_visit_abandoned` to be set
+/// Note: requires the option mi_option_visit_abandoned() to be set
 /// at the start of the program to visit all abandoned blocks as well.
 bool mi_heap_visit_blocks(const mi_heap_t* heap, bool visit_blocks, mi_block_visit_fun* visitor, void* arg);
 
@@ -661,7 +670,7 @@ bool mi_heap_visit_blocks(const mi_heap_t* heap, bool visit_blocks, mi_block_vis
 /// @param arg extra argument passed to the \a visitor.
 /// @return \a true if all areas and blocks were visited.
 ///
-/// Note: requires the option `mi_option_visit_abandoned` to be set
+/// Note: requires the option mi_option_visit_abandoned() to be set
 /// at the start of the program.
 bool mi_abandoned_visit_blocks(mi_subproc_id_t subproc_id, int heap_tag, bool visit_blocks, mi_block_visit_fun* visitor, void* arg);
 
@@ -801,9 +810,8 @@ mi_heap_t* mi_heap_new_ex(int heap_tag, bool allow_destroy, mi_arena_id_t arena_
 
 
 /// \defgroup subproc Subprocesses
+/// A sub-process contains its own arena's and heaps that are fully separate from the main (sub) process. 
 ///
-/// A sub-process contains its own arena's and heaps that are fully 
-/// separate from the main (sub) process. 
 /// A thread can belong to only one subprocess at a time.
 /// This can be used to separate out logically separate parts
 /// of a program (like running multiple interpreter instances in CPython).
@@ -862,7 +870,8 @@ bool mi_subproc_visit_heaps(mi_subproc_id_t subproc, mi_heap_visit_fun* visitor,
 // ------------------------------------------------------
 
 /// \defgroup extended Extended Functions
-/// Extended functionality.
+/// Internal functionality.
+///
 /// \{
 
 /// Maximum size allowed for small allocations in
@@ -906,17 +915,6 @@ void mi_thread_init(void);
 /// automatically. Ensures that any memory that is not freed yet (but will
 /// be freed by other threads in the future) is properly handled.
 void mi_thread_done(void);
-
-/// @brief Print out all runtime parameters for mimalloc.
-/// Also printed with `MIMALLOC_VERBOSE=1` at startup.
-void mi_options_print(void);
-
-/// @brief Print out all process info.
-/// @param out An output function or \a NULL for the default.
-/// @param arg Optional argument passed to \a out (if not \a NULL)
-/// Also printed with `MIMALLOC_VERBOSE=1` at startup.
-/// @see mi_options_print()
-void mi_options_print_out(mi_output_fun* out, void* arg);
 
 /// Type of deferred free functions.
 /// @param force If \a true all outstanding items should be freed.
@@ -1015,9 +1013,17 @@ void* mi_zalloc_small(size_t size);
 #define MI_STAT_VERSION   4
 
 /// Helper to declare a properly initialized mi_stats_t() local variable as \a name
+/// where the \a size and \a version fields are properly initialized.
+/// For example:
+/// ```
+/// mi_stats_t_decl(stats);
+/// if (mi_stats_get(&stats)) {
+///   ...
+/// }
+/// ```
 #define mi_stats_t_decl(name)
 
-/// Statistics. See `include/mimalloc-stats.h` for the full definition.
+/// Statistics. See [include/mimalloc-stats.h](https://github.com/microsoft/mimalloc/blob/main/include/mimalloc-stats.h) for the full definition.
 struct mi_stats_s {
   /// initialize with `sizeof(mi_stats_t)` (so linking dynamically with a separately compiled mimalloc is safe)
   size_t size;      
@@ -1025,7 +1031,7 @@ struct mi_stats_s {
   size_t version;  
 };
 
-/// Statistics. See `include/mimalloc-stats.h` for the full definition.
+/// Statistics. See [include/mimalloc-stats.h](https://github.com/microsoft/mimalloc/blob/main/include/mimalloc-stats.h) for the full definition.
 typedef struct mi_stats_s mi_stats_t;
 
 
@@ -1135,7 +1141,7 @@ char* mi_subproc_stats_get_json(mi_subproc_id_t subproc_id, size_t buf_size, cha
 void  mi_subproc_stats_print_out(mi_subproc_id_t subproc_id, mi_output_fun* out, void* arg);
 
 
-/// @brief __v3__: Print statistics for a given subprocess with each heap separated printed.
+/// @brief __v3__: Print statistics for a given subprocess with each heap separately printed.
 /// @param subproc_id The subprocess
 /// @param out An output function or \a NULL for the default.
 /// @param arg Optional argument passed to \a out (if not \a NULL)
@@ -1162,10 +1168,21 @@ void mi_stats_merge(void);
 // ------------------------------------------------------
 
 /// \defgroup options Runtime Options
-///
-/// Set runtime behavior.
+/// Set runtime parameters.
 ///
 /// \{
+
+/// @brief Print out all runtime parameters for mimalloc.
+/// Also printed with `MIMALLOC_VERBOSE=1` at startup.
+void mi_options_print(void);
+
+/// @brief Print out all process info.
+/// @param out An output function or \a NULL for the default.
+/// @param arg Optional argument passed to \a out (if not \a NULL)
+/// Also printed with `MIMALLOC_VERBOSE=1` at startup.
+/// @see mi_options_print()
+void mi_options_print_out(mi_output_fun* out, void* arg);
+
 
 /// Runtime options.
 typedef enum mi_option_e {
@@ -1179,30 +1196,51 @@ typedef enum mi_option_e {
   // advanced options
   mi_option_reserve_huge_os_pages,    ///< reserve N huge OS pages (1GiB pages) at startup
   mi_option_reserve_huge_os_pages_at, ///< Reserve N huge OS pages at a specific NUMA node N.
-  mi_option_reserve_os_memory,        ///< reserve specified amount of OS memory in an arena at startup (internally, this value is in KiB; use `mi_option_get_size`)
+  mi_option_reserve_os_memory,        ///< reserve specified amount of OS memory in an arena at startup (internally, this value is in KiB; use mi_option_get_size())
   mi_option_allow_large_os_pages,     ///< allow large (2 or 4 MiB) OS pages, implies eager commit. 
   mi_option_purge_decommits,          ///< should a memory purge decommit? (=1). Set to 0 to use memory reset on a purge (instead of decommit)
-  mi_option_arena_reserve,            ///< initial memory size for arena reservation (= 1 GiB on 64-bit) (internally, this value is in KiB; use `mi_option_get_size`)
+  mi_option_arena_reserve,            ///< initial memory size for arena reservation (= 1 GiB on 64-bit) (internally, this value is in KiB; use mi_option_get_size())
   mi_option_os_tag,                   ///< tag used for OS logging (macOS only for now) (=100)
   mi_option_retry_on_oom,             ///< retry on out-of-memory for N milli seconds (=400), set to 0 to disable retries. (only on windows)
+  mi_option_generic_collect,          ///< collect heaps every N (=10000) generic allocation calls
+  mi_option_allow_thp,                ///< allow transparent huge pages? (=1) (on Android =0 by default). Set to 0 to disable THP for the process.
+
+  // guard pages
+  mi_option_guarded_min,              ///< only used when building with MI_GUARDED: minimal rounded object size for guarded objects (=0)
+  mi_option_guarded_max,              ///< only used when building with MI_GUARDED: maximal rounded object size for guarded objects (=0)
+  mi_option_guarded_precise,          ///< disregard minimal alignment requirement to always place guarded blocks exactly in front of a guard page (=0)
+  mi_option_guarded_sample_rate,      ///< 1 out of N allocations in the min/max range will be guarded (=1000)
+  mi_option_guarded_sample_seed,      ///< can be set to allow for a (more) deterministic re-execution when a guard page is triggered (=0)
 
   // experimental options
-  mi_option_eager_commit,             ///< eager commit segments? (after `eager_commit_delay` segments) (enabled by default).
-  mi_option_eager_commit_delay,       ///< the first N segments per thread are not eagerly committed (but per page in the segment on demand)
+  mi_option_eager_commit,             ///< __v1__,__v2__: eager commit segments? (after `eager_commit_delay` segments) (enabled by default).
+  mi_option_eager_commit_delay,       ///< __v2__: the first N segments per thread are not eagerly committed (but per page in the segment on demand)
   mi_option_arena_eager_commit,       ///< eager commit arenas? Use 2 to enable just on overcommit systems (=2)
-  mi_option_abandoned_page_purge,     ///< immediately purge delayed purges on thread termination
+  mi_option_abandoned_page_purge,     ///< __v1__,__v2__: immediately purge delayed purges on thread termination
   mi_option_purge_delay,              ///< memory purging is delayed by N milli seconds; use 0 for immediate purging or -1 for no purging at all. (=10)
   mi_option_use_numa_nodes,           ///< 0 = use all available numa nodes, otherwise use at most N nodes.
-  mi_option_disallow_os_alloc,        ///< 1 = do not use OS memory for allocation (but only programmatically reserved arenas)
-  mi_option_limit_os_alloc,           ///< If set to 1, do not use OS memory for allocation (but only pre-reserved arenas)
-  mi_option_max_segment_reclaim,        ///< max. percentage of the abandoned segments can be reclaimed per try (=10%)
+  mi_option_disallow_os_alloc,        ///< 1 = do not use OS memory for allocation (but only programmatically reserved arenas)  
+  mi_option_max_segment_reclaim,        ///< __v2__: max. percentage of the abandoned segments can be reclaimed per try (=10%)
   mi_option_destroy_on_exit,            ///< if set, release all memory on exit; sometimes used for dynamic unloading but can be unsafe
   mi_option_arena_purge_mult,           ///< multiplier for `purge_delay` for the purging delay for arenas (=10)
-  mi_option_abandoned_reclaim_on_free,  ///< allow to reclaim an abandoned segment on a free (=1)
-  mi_option_purge_extend_delay,         ///< extend purge delay on each subsequent delay (=1)
+  mi_option_abandoned_reclaim_on_free,  ///< __v1__,__v2__: allow to reclaim an abandoned segment on a free (=1)
+  mi_option_purge_extend_delay,         ///< __v1__,__v2__: extend purge delay on each subsequent delay (=1)
   mi_option_disallow_arena_alloc,       ///< 1 = do not use arena's for allocation (except if using specific arena id's)
   mi_option_visit_abandoned,            ///< allow visiting heap blocks from abandoned threads (=0)
+  mi_option_target_segments_per_thread, ///< __v1__,__v2__: experimental (=0)
 
+  // v3 options
+  mi_option_page_reclaim_on_free,       ///< __v3__: reclaim abandoned pages on a free (=0). -1 disallowr always, 0 allows if the page originated from the current theap, 1 allow always
+  mi_option_page_full_retain,           ///< __v3__: retain N full (small) pages per size class (=2). Use -1 for infinite (as in __v1__,__v2__).
+  mi_option_page_max_candidates,        ///< __v3__: max candidate pages to consider for allocation (=4)
+  mi_option_max_vabits,                 ///< __v3__: max user space virtual address bits to consider (=48)
+  mi_option_pagemap_commit,             ///< __v3__: commit the full pagemap (to always catch invalid pointer uses) (=0)
+  mi_option_page_commit_on_demand,      ///< __v3__: commit page memory on-demand (=0)
+  mi_option_page_max_reclaim,           ///< __v3__: don't reclaim pages of the same originating theap if we already own N pages (in that size class) (=-1 (unlimited))
+  mi_option_page_cross_thread_max_reclaim, ///< __v3__: don't reclaim pages across threads if we already own N pages (in that size class) (=16)
+  mi_option_minimal_purge_size,         ///< __v3__: set minimal purge size (in KiB) (=0). By default set to either 64 or 2048 if THP is enabled. (internal value is in KiB so use mi_option_get_size())
+  mi_option_arena_max_object_size,      ///< __v3__: set maximal object size that can be allocated in an arena (in KiB) (=2GiB on 64-bit). 
+  
   _mi_option_last
 } mi_option_t;
 
@@ -1224,6 +1262,7 @@ void  mi_option_set_default(mi_option_t option, long value);
 
 /// \defgroup theap Thread-local heaps
 /// __v3__: Thread local heaps.
+///
 /// The use of thread-local heaps is discouraged and only recommended
 /// for special cases like runtime systems that keep their own thread-local
 /// state.
@@ -1273,7 +1312,6 @@ void* mi_theap_realloc(mi_theap_t* theap, void* p, size_t newsize);
 
 
 /// \defgroup posix Posix
-///
 ///  `mi_` prefixed implementations of various Posix, Unix, and C++ allocation functions.
 ///  Defined for convenience as all redirect to the regular mimalloc API.
 ///
@@ -1316,9 +1354,9 @@ void mi_free_aligned(void* p, size_t alignment);
 /// \}
 
 /// \defgroup cpp C++ wrappers
+/// `mi_` prefixed implementations of various C++ allocation functions.
 ///
-///  `mi_` prefixed implementations of various allocation functions
-///  that use C++ semantics on out-of-memory, generally calling
+///  These use C++ semantics on out-of-memory, generally calling
 ///  `std::get_new_handler` and raising a `std::bad_alloc` exception on failure.
 ///
 ///  Note: use the `mimalloc-new-delete.h` header to override the \a new
@@ -1557,7 +1595,7 @@ See \ref overrides for more info.
 
 /*! \page environment Environment Options
 
-You can set further options either programmatically (using [`mi_option_set`](https://microsoft.github.io/mimalloc/group__options.html)), or via environment variables:
+You can set further options either programmatically (using mi_option_set(), see \ref options), or via environment variables:
 
 - `MIMALLOC_SHOW_STATS=1`: show statistics when the program terminates.
 - `MIMALLOC_VERBOSE=1`: show verbose messages (including statistics).
@@ -1689,7 +1727,7 @@ There are four requirements to make the overriding work well:
 
 For best performance on Windows with C++, it
 is also recommended to also override the `new`/`delete` operations (by including
-[`mimalloc-new-delete.h`](include/mimalloc-new-delete.h)
+[`mimalloc-new-delete.h`](https://github.com/microsoft/mimalloc/blob/main/include/mimalloc-new-delet.h)
 a single(!) source file in your project).
 
 The environment variable `MIMALLOC_DISABLE_REDIRECT=1` can be used to disable dynamic
@@ -1718,7 +1756,7 @@ object file. For example:
 Another way to override statically that works on all platforms, is to
 link statically to mimalloc (as shown in the introduction) and include a
 header file in each source file that re-defines `malloc` etc. to `mi_malloc`.
-This is provided by [`mimalloc-override.h`](https://github.com/microsoft/mimalloc/blob/master/include/mimalloc-override.h). This only works reliably though if all sources are
+This is provided by [`mimalloc-override.h`](https://github.com/microsoft/mimalloc/blob/main/include/mimalloc-override.h). This only works reliably though if all sources are
 under your control or otherwise mixing of pointers from different heaps may occur!
 
 ## List of Overrides:
