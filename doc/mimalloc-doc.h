@@ -1012,11 +1012,17 @@ void* mi_zalloc_small(size_t size);
 /// \{
 
 /// Statistics version. Increased on each backward incompatible change.
-#define MI_STAT_VERSION   3
+#define MI_STAT_VERSION   4
+
+/// Helper to declare a properly initialized mi_stats_t() local variable as \a name
+#define mi_stats_t_decl(name)
 
 /// Statistics. See `include/mimalloc-stats.h` for the full definition.
 struct mi_stats_s {
-  int version;  
+  /// initialize with `sizeof(mi_stats_t)` (so linking dynamically with a separately compiled mimalloc is safe)
+  size_t size;      
+  /// initialize with `MI_STAT_VERSION (so linking dynamically with a separately compiled mimalloc is safe)
+  size_t version;  
 };
 
 /// Statistics. See `include/mimalloc-stats.h` for the full definition.
@@ -1062,53 +1068,86 @@ void mi_stats_print(void* out);
 /// Most detailed when using a debug build.
 void mi_stats_print_out(mi_output_fun* out, void* arg);
 
-/// @brief Get the statistics for the current subprocess.
-/// @param stats_size Pre-allocated size of the mi_stats_t() stucture.
-/// @param stats Pointer to a mi_stats_t() structure.
-/// @param Returns \a true if the \a stats_size was large enough
-/// to write the statistics (and \a stats was not \a NULL). 
-/// The \a version field in \a stats is initialized to the `MI_STAT_VERSION`
-/// as mimalloc was compiled. A program that dynamically links to mimalloc
-/// should check that the version is an exact match.
-bool mi_stats_get(size_t stats_size, mi_stats_t* stats);
+/// @brief Get the statistics for the current subprocess aggregated over all its heaps.
+/// @param stats Pointer to a mi_stats_t() structure (declared as `mi_stats_t_decl(name)`).
+/// @return \a true if \a stats is not \a NULL, and if \a stats->size 
+/// and \a stats->version match the `sizeof(mi_stats_t)` and `MI_STAT_VERSION`
+/// with the linked mimalloc version.
+bool mi_stats_get(mi_stats_t* stats);
 
-/// @brief Get the statistics for the current subprocess as JSON.
-/// @param buf_size Byte size of the buffer @buf (or 0 if \a buf is \a NULL)
+/// @brief Get the statistics for the current subprocess aggregated over all its heaps as JSON.
+/// @param buf_size Byte size of the buffer \a buf (or 0 if \a buf is \a NULL)
 /// @param buf The buffer. Pass \a NULL to allocate a fresh buffer.
 /// @return Pointer to the buffer or \a NULL on failure.
-/// Use mi_free() to free the buffer if \a buf was \a NULL.
-char*   mi_stats_get_json(size_t buf_size, char* buf);
-void    mi_stats_print_out(mi_output_fun* out, void* arg);
+/// Use mi_free() to free the buffer if the \a buf parameter was \a NULL.
+char*  mi_stats_get_json(size_t buf_size, char* buf);
 
-/// @brief Return the block size for the given bin.
+/// @brief __v3__: Return the block size for the given bin.
 size_t  mi_stats_get_bin_size(size_t bin);
 
-/// @brief Return statistics for a given heap.
+/// @brief __v3__: Return statistics for a given heap.
 /// @param heap The heap.
-/// @param stats_size Pre-allocated size of the mi_stats_t() stucture.
-/// @param stats Pointer to a mi_stats_t() structure.
-void    mi_heap_stats_get(mi_heap_t* heap, size_t stats_size, mi_stats_t* stats);
-char*   mi_heap_stats_get_json(mi_heap_t* heap, size_t buf_size, char* buf);      // use mi_free to free the result if the input buf == NULL
-void    mi_heap_stats_print_out(mi_heap_t* heap, mi_output_fun* out, void* arg);
+/// @param stats Pointer to a mi_stats_t() structure (declared as `mi_stats_t_decl(name)`).
+/// @return \a true if \a stats is not \a NULL, and if \a stats->size 
+/// and \a stats->version match the `sizeof(mi_stats_t)` and `MI_STAT_VERSION`
+/// with the linked mimalloc version.
+bool mi_heap_stats_get(mi_heap_t* heap, mi_stats_t* stats);
 
-/// @brief Explicitly merge the statistics of the current heap with the subprocess.
+/// @brief __v3__: Get the statistics for a heap as JSON.
+/// @param heap The heap.
+/// @param buf_size Byte size of the buffer \a buf (or 0 if \a buf is \a NULL).
+/// @param buf The buffer. Pass \a NULL to allocate a fresh buffer.
+/// @return Pointer to the buffer or \a NULL on failure.
+/// Use mi_free() to free the buffer if the \a buf parameter was \a NULL.
+char* mi_heap_stats_get_json(mi_heap_t* heap, size_t buf_size, char* buf);      // use mi_free to free the result if the input buf == NULL
+
+/// @brief __v3__: Show the heap statitics as JSON.
+/// @param heap The heap.
+/// @param out An output function or \a NULL for the default.
+/// @param arg Optional argument passed to \a out (if not \a NULL)
+void mi_heap_stats_print_out(mi_heap_t* heap, mi_output_fun* out, void* arg);
+
+/// @brief __v3__: xplicitly merge the statistics of the current heap with the subprocess.
 /// @param heap The heap.
 /// After this call, the heap statistics are reset.
-void    mi_heap_stats_merge_to_subproc(mi_heap_t* heap);
+void mi_heap_stats_merge_to_subproc(mi_heap_t* heap);
 
-/// @brief Get statistics for a given subprocess aggregated over all its heaps.
+/// @brief __v3__: Get statistics for a given subprocess aggregated over all its heaps.
 /// @param subproc_id The subprocess
-/// @param stats_size Pre-allocated size of the mi_stats_t() stucture.
-/// @param stats Pointer to a mi_stats_t() structure.
-void    mi_subproc_stats_get(mi_subproc_id_t subproc_id, size_t stats_size, mi_stats_t* stats);
-char*   mi_subproc_stats_get_json(mi_subproc_id_t subproc_id, size_t buf_size, char* buf);      // use mi_free to free the result if the input buf == NULL
-void    mi_subproc_stats_print_out(mi_subproc_id_t subproc_id, mi_output_fun* out, void* arg);
+/// @param stats Pointer to a mi_stats_t() structure (declared as `mi_stats_t_decl(name)`).
+/// @return \a true if \a stats is not \a NULL, and if \a stats->size 
+/// and \a stats->version match the `sizeof(mi_stats_t)` and `MI_STAT_VERSION`
+/// with the linked mimalloc version.
+bool mi_subproc_stats_get(mi_subproc_id_t subproc_id, mi_stats_t* stats);
+
+/// @brief __v3__: Show the subproc statitics aggregated with all its heaps as JSON.
+/// @param subproc_id The subprocess.
+/// @param buf_size Byte size of the buffer \a buf (or 0 if \a buf is \a NULL).
+/// @param buf The buffer. Pass \a NULL to allocate a fresh buffer.
+/// @return Pointer to the buffer or \a NULL on failure.
+/// Use mi_free() to free the buffer if the \a buf parameter was \a NULL.
+char* mi_subproc_stats_get_json(mi_subproc_id_t subproc_id, size_t buf_size, char* buf);      // use mi_free to free the result if the input buf == NULL
+
+/// @brief __v3__: Show the subproc statitics aggregated with all its heaps as JSON.
+/// @param subproc_id The subprocess.
+/// @param out An output function or \a NULL for the default.
+/// @param arg Optional argument passed to \a out (if not \a NULL)
+void  mi_subproc_stats_print_out(mi_subproc_id_t subproc_id, mi_output_fun* out, void* arg);
 
 
-/// @brief Print statistics for a given subprocess 
+/// @brief __v3__: Print statistics for a given subprocess with each heap separated printed.
 /// @param subproc_id The subprocess
-void    mi_subproc_heap_stats_print_out(mi_subproc_id_t subproc_id, mi_output_fun* out, void* arg);
+/// @param out An output function or \a NULL for the default.
+/// @param arg Optional argument passed to \a out (if not \a NULL)
+void mi_subproc_heap_stats_print_out(mi_subproc_id_t subproc_id, mi_output_fun* out, void* arg);
 
+/// @brief __v3__: Show the given statistics as JSON.
+/// @param stats The statistics.
+/// @param buf_size Byte size of the buffer \a buf (or 0 if \a buf is \a NULL).
+/// @param buf The buffer. Pass \a NULL to allocate a fresh buffer.
+/// @return Pointer to the buffer or \a NULL on failure.
+/// Use mi_free() to free the buffer if the \a buf parameter was \a NULL.
+char*  mi_stats_as_json( mi_stats_t* stats, size_t buf_size, char* buf);
 
 /// __v1__,__v2__: Reset statistics.
 void mi_stats_reset(void);

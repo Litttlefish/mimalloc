@@ -90,6 +90,9 @@ typedef struct mi_stats_s
 #undef MI_STAT_COUNT
 #undef MI_STAT_COUNTER
 
+// helper
+#define mi_stats_t_decl(name)  mi_stats_t name = { 0 }; name.size = sizeof(mi_stats_t); name.version = MI_STAT_VERSION;
+
 // Exported definitions
 #ifdef __cplusplus
 extern "C" {
