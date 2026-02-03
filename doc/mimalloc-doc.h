@@ -25,7 +25,7 @@ without code changes, for example, on Unix you can use it as:
 ```
 
 Notable aspects of the design include:
-- __small and consistent__: the library is about 8k LOC using simple and
+- __small and consistent__: the core library is about 10k LOC using simple and
   consistent data structures. This makes it very suitable
   to integrate and adapt in other projects. For runtime systems it
   provides hooks for a monotonic _heartbeat_ and deferred freeing (for
@@ -67,14 +67,11 @@ Notable aspects of the design include:
   and often uses less memory. A nice property is that it does consistently well over a wide range
   of benchmarks. There is also good huge OS page support for larger server programs.
 
-You can read more on the design of _mimalloc_ in the
-[technical report](https://www.microsoft.com/en-us/research/publication/mimalloc-free-list-sharding-in-action)
-which also has detailed benchmark results.
+There are three maintained versions of mimalloc. All versions are mostly equal except for 
+how the OS memory is handled. New development is mostly on v3, while v1 and v2 are maintained 
+with security and bug fixes. 
 
-There are three maintained versions of mimalloc. 
-New development is on v3, while v1 and v2 are maintained with security and bug fixes.
-
-- __v1__: initial design of mimalloc (release tags: `v1.9.x`, development branch `dev`)
+- __v1__: initial design of mimalloc (release tags: `v1.9.x`, development branch `dev`). Send PR's against this version if possible.
 - __v2__: main mimalloc version. Uses thread-local segments to reduce fragmentation. (release tags: `v2.2.x`, development branch `dev2`)
 - __v3__: simplifies the lock-free design of previous versions, and improves sharing of 
         memory between threads. On certain large workloads this version may use 
@@ -82,7 +79,10 @@ New development is on v3, while v1 and v2 are maintained with security and bug f
         and has more efficient heap-walking (for the CPython GC for example).
         (release tags: `v3.2.x`, development branch `dev3`).
 
-To learn more about the internals of mimalloc, see [include/mimalloc/types.h](https://github.com/microsoft/mimalloc/blob/master/include/mimmalloc/types.h).
+You can read more on the design of mimalloc in the
+[technical report](https://www.microsoft.com/en-us/research/publication/mimalloc-free-list-sharding-in-action)
+which also has detailed benchmark results.
+To learn more about the internal implementation of mimalloc, see [include/mimalloc/types.h](https://github.com/microsoft/mimalloc/blob/master/include/mimalloc/types.h).
 
 Further information:
 
