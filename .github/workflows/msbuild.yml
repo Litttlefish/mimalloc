@@ -87,7 +87,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: compiles-${{matrix.configuration}}
-        path: out/*/*/*.*
+        path: build/*/*/*.*
         retention-days: 3
 
     - name: Upload to release
