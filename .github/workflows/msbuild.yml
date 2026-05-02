@@ -57,11 +57,24 @@ jobs:
         ref: ${{ github.event.inputs.tag_name }}
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+      
+    - name: Configure mimalloc (CMake)
+      shell: bash
+      run: |
+        cmake -B build \
+          -G "Visual Studio 17 2022" \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} \
+          -DMI_OPT_ARCH=ON \
+          -DMI_OPT_SIMD=ON \
+          -DMI_XMALLOC=OFF \
+          -DMI_BUILD_OBJECT=OFF \
+          -DMI_BUILD_TESTS=OFF \
+          -DMI_BUILD_STATIC=OFF \
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -70,7 +83,7 @@ jobs:
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{matrix.configuration}} ${{env.SOLUTION_FILE_PATH}}
       
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: compiles-${{matrix.configuration}}
         path: out/*/*/*.*
