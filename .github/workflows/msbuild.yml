@@ -34,7 +34,7 @@ jobs:
   build:
     strategy:
         matrix:
-          configuration: [x64, Win32]
+          configuration: [x64, x86]
           # configuration: [x64, x86]
     runs-on: windows-latest
 
