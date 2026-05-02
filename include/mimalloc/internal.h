@@ -109,6 +109,7 @@ void        _mi_strlcpy(char* dest, const char* src, size_t dest_size);
 void        _mi_strlcat(char* dest, const char* src, size_t dest_size);
 size_t      _mi_strlen(const char* s);
 size_t      _mi_strnlen(const char* s, size_t max_len);
+bool        _mi_streq(const char* s, const char* t);
 bool        _mi_getenv(const char* name, char* result, size_t result_size);
 
 // "options.c"
@@ -351,7 +352,7 @@ mi_decl_noreturn mi_decl_cold void _mi_assert_fail(const char* assertion, const 
   Inlined definitions
 ----------------------------------------------------------- */
 #define MI_UNUSED(x)     (void)(x)
-#if (MI_DEBUG>0)
+#if (MI_DEBUG>1)
 #define MI_UNUSED_RELEASE(x)
 #else
 #define MI_UNUSED_RELEASE(x)  MI_UNUSED(x)
@@ -377,8 +378,7 @@ static inline bool _mi_is_power_of_two(uintptr_t x) {
 
 // Is a pointer aligned?
 static inline bool _mi_is_aligned(void* p, size_t alignment) {
-  mi_assert_internal(alignment != 0);
-  return (((uintptr_t)p % alignment) == 0);
+  return (alignment==0 || ((uintptr_t)p % alignment) == 0);
 }
 
 // Align upwards

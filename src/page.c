@@ -79,8 +79,16 @@ static bool mi_page_list_is_valid(mi_page_t* page, mi_block_t* p) {
 
 static bool mi_page_is_valid_init(mi_page_t* page) {
   mi_assert_internal(mi_page_block_size(page) > 0);
+  
   mi_assert_internal(page->used <= page->capacity);
   mi_assert_internal(page->capacity <= page->reserved);
+
+  // [specbot P-NEW-1] block_size_shift must be consistent with block_size (L1, O(1))
+  mi_assert_internal(page->block_size_shift == 0 || (mi_page_block_size(page) == ((size_t)1 << page->block_size_shift)));
+  // [specbot P-NEW-2] capacity must be nonzero when blocks are in use (L1, O(1))
+  mi_assert_internal(page->used == 0 || page->capacity > 0);
+  // [specbot P-NEW-4] page_start must be non-null when capacity > 0 (L1, O(1))
+  mi_assert_internal(page->capacity == 0 || mi_page_start(page) != NULL);
 
   uint8_t* start = mi_page_start(page);
   mi_assert_internal(start == _mi_segment_page_start(_mi_page_segment(page), page, NULL));
@@ -89,6 +97,18 @@ static bool mi_page_is_valid_init(mi_page_t* page) {
 
   mi_assert_internal(mi_page_list_is_valid(page,page->free));
   mi_assert_internal(mi_page_list_is_valid(page,page->local_free));
+
+  // [specbot P-NEW-7] All free list blocks are aligned to block_size (L2, O(n))
+  {
+    size_t bsize = mi_page_block_size(page);
+    uint8_t* pstart = mi_page_start(page);
+    for (mi_block_t* b = page->free; b != NULL; b = mi_block_next(page, b)) {
+      mi_assert_internal(((uint8_t*)b - pstart) % bsize == 0);
+    }
+    for (mi_block_t* b = page->local_free; b != NULL; b = mi_block_next(page, b)) {
+      mi_assert_internal(((uint8_t*)b - pstart) % bsize == 0);
+    }
+  }
 
   #if MI_DEBUG>3 // generally too expensive to check this
   if (page->free_is_zero) {
@@ -121,6 +141,9 @@ bool _mi_page_is_valid(mi_page_t* page) {
   #endif
   if (mi_page_heap(page)!=NULL) {
     mi_segment_t* segment = _mi_page_segment(page);
+
+    // [specbot P-NEW-6] heap_tag must match owning heap's tag (L1, O(1))
+    mi_assert_internal(page->heap_tag == mi_page_heap(page)->tag);
 
     mi_assert_internal(!_mi_process_is_initialized || segment->thread_id==0 || segment->thread_id == mi_page_heap(page)->thread_id);
     #if MI_HUGE_PAGE_ABANDON
@@ -201,8 +224,13 @@ static void _mi_page_thread_free_collect(mi_page_t* page)
     tail = next;
   }
   // if `count > max_count` there was a memory corruption (possibly infinite list due to double multi-threaded free)
-  if (count > max_count) {
+  if mi_unlikely(count > max_count) {
     _mi_error_message(EFAULT, "corrupted thread-free list\n");
+    return; // the thread-free items cannot be freed
+  }
+  // if `count > page->used` there was another kind memory corruption (either in the page meta-data or in the linked list)
+  else if mi_unlikely(count > page->used) {
+    _mi_error_message(EFAULT, "corrupted meta-data in thread-free list\n");
     return; // the thread-free items cannot be freed
   }
 
@@ -211,7 +239,9 @@ static void _mi_page_thread_free_collect(mi_page_t* page)
   page->local_free = head;
 
   // update counts now
-  page->used -= (uint16_t)count;
+  mi_assert_internal(count <= UINT16_MAX);
+  mi_assert_internal(page->used >= (uint16_t)count);
+  page->used = page->used - (uint16_t)count;
 }
 
 void _mi_page_free_collect(mi_page_t* page, bool force) {
@@ -621,8 +651,8 @@ static mi_decl_noinline void mi_page_free_list_extend( mi_page_t* const page, co
 ----------------------------------------------------------- */
 
 #define MI_MAX_EXTEND_SIZE    (4*1024)      // heuristic, one OS page seems to work well.
-#if (MI_SECURE>0)
-#define MI_MIN_EXTEND         (8*MI_SECURE) // extend at least by this many
+#if (MI_SECURE>=2)
+#define MI_MIN_EXTEND         (8*MI_SECURE) // extend at least by this many blocks
 #else
 #define MI_MIN_EXTEND         (4)
 #endif
@@ -662,7 +692,7 @@ static bool mi_page_extend_free(mi_heap_t* heap, mi_page_t* page, mi_tld_t* tld)
   mi_assert_internal(extend < (1UL<<16));
 
   // and append the extend the free list
-  if (extend < MI_MIN_SLICES || MI_SECURE==0) { //!mi_option_is_enabled(mi_option_secure)) {
+  if (extend < MI_MIN_SLICES || MI_SECURE<2) { //!mi_option_is_enabled(mi_option_secure)) {
     mi_page_free_list_extend(page, bsize, extend, &tld->stats );
   }
   else {
@@ -862,7 +892,7 @@ static inline mi_page_t* mi_find_free_page(mi_heap_t* heap, size_t size) {
   // check the first page: we even do this with candidate search or otherwise we re-search every time
   mi_page_t* page = pq->first;
   if (page != NULL) {
-   #if (MI_SECURE>=3) // in secure mode, we extend half the time to increase randomness
+   #if (MI_SECURE>=2) // in secure mode, we extend half the time to increase randomness
     if (page->capacity < page->reserved && ((_mi_heap_random_next(heap) & 1) == 1)) {
       mi_page_extend_free(heap, page, heap->tld);
       mi_assert_internal(mi_page_immediate_available(page));
@@ -890,21 +920,24 @@ static inline mi_page_t* mi_find_free_page(mi_heap_t* heap, size_t size) {
   a certain number of allocations.
 ----------------------------------------------------------- */
 
-static mi_deferred_free_fun* volatile deferred_free = NULL;
-static _Atomic(void*) deferred_arg; // = NULL
+// The program should only install a single deferred free handler before doing allocation.
+static _Atomic(void*) deferred_free; // is `mi_deferred_free_fun*` (but some platforms don't support atomic function pointers)
+static _Atomic(void*) deferred_arg;   
 
 void _mi_deferred_free(mi_heap_t* heap, bool force) {
   heap->tld->heartbeat++;
-  if (deferred_free != NULL && !heap->tld->recurse) {
+  mi_deferred_free_fun* const fun = (mi_deferred_free_fun*)mi_atomic_load_ptr_acquire(void,&deferred_free);
+  if (fun != NULL && !heap->tld->recurse) {
     heap->tld->recurse = true;
-    deferred_free(force, heap->tld->heartbeat, mi_atomic_load_ptr_relaxed(void,&deferred_arg));
+    void* const arg = mi_atomic_load_ptr_acquire(void,&deferred_arg);  
+    fun(force, heap->tld->heartbeat, arg);
     heap->tld->recurse = false;
   }
 }
 
 void mi_register_deferred_free(mi_deferred_free_fun* fn, void* arg) mi_attr_noexcept {
-  deferred_free = fn;
   mi_atomic_store_ptr_release(void,&deferred_arg, arg);
+  mi_atomic_store_ptr_release(void,&deferred_free, (void*)fn);  
 }
 
 
