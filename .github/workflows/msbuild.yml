@@ -69,6 +69,7 @@ jobs:
       run: |
         cmake -B build \
           -G "Visual Studio 17 2022" \
+          -A ${{matrix.configuration}} \
           -DCMAKE_BUILD_TYPE=${{env.BUILD_CONFIGURATION}} \
           -DMI_OPT_ARCH=ON \
           -DMI_OPT_SIMD=ON \
