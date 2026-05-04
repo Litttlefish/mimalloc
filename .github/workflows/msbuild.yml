@@ -34,7 +34,7 @@ jobs:
   build:
     strategy:
         matrix:
-          configuration: [x64, Win32]
+          configuration: [x64, x86]
           # configuration: [x64, x86]
     runs-on: windows-latest
 
@@ -70,19 +70,20 @@ jobs:
       run: |
         cmake -B build \
           -G "Visual Studio 17 2022" \
-          -A ${{matrix.configuration}} \
+          -DMI_ARCH=${{matrix.configuration}} \
           -DMI_OPT_ARCH=ON \
           -DMI_OPT_SIMD=ON \
           -DMI_XMALLOC=OFF \
           -DMI_BUILD_OBJECT=OFF \
           -DMI_BUILD_TESTS=OFF \
           -DMI_BUILD_STATIC=OFF \
+          -DMI_USE_CXX=ON \
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
-      run: cmake --build build --config ${{env.BUILD_CONFIGURATION}}
+      run: cmake --build build --config ${{env.BUILD_CONFIGURATION}} --platform ${{matrix.configuration}}
       # run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{matrix.configuration}} ${{env.SOLUTION_FILE_PATH}}
       
     - name: Upload artifacts
