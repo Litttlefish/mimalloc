@@ -78,6 +78,7 @@ jobs:
           -DMI_BUILD_TESTS=OFF \
           -DMI_BUILD_STATIC=OFF \
           -DMI_USE_CXX=ON \
+          -DMI_WIN_INIT_USE_RAW_DLLMAIN=ON \
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
