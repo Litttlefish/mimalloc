@@ -71,7 +71,7 @@ jobs:
         cmake -B build \
           -G "Visual Studio 17 2022" \
           -A ${{matrix.configuration}} \
-          -DCMAKE_C_FLAGS="/O2 /Ob2 /Oi /Oy /Gy /GL /GT" \
+          -DCMAKE_C_FLAGS="/O2 /Ob2 /Oi /Oy /Gy /GL /GT /Zc:inline" \
           -DMI_OPT_ARCH=ON \
           -DMI_OPT_SIMD=ON \
           -DMI_XMALLOC=OFF \
