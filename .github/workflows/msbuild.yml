@@ -71,13 +71,14 @@ jobs:
         cmake -B build \
           -G "Visual Studio 17 2022" \
           -A ${{matrix.configuration}} \
+          -DCMAKE_C_FLAGS="/O2 /Ob2 /Oi /Oy /Gy /GL /GT /guard:cf /favor:blend /fp:fast" \
           -DMI_OPT_ARCH=ON \
           -DMI_OPT_SIMD=ON \
           -DMI_XMALLOC=OFF \
           -DMI_BUILD_OBJECT=OFF \
           -DMI_BUILD_TESTS=OFF \
           -DMI_BUILD_STATIC=OFF \
-          -DMI_USE_CXX=ON \
+          -DMI_NO_USE_CXX=ON \
           -DMI_WIN_INIT_USE_RAW_DLLMAIN=ON \
 
     - name: Build
