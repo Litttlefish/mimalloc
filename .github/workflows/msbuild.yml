@@ -78,6 +78,7 @@ jobs:
           -DMI_BUILD_OBJECT=OFF \
           -DMI_BUILD_TESTS=OFF \
           -DMI_BUILD_STATIC=OFF \
+          -DMI_SKIP_COLLECT_ON_EXIT=ON \
           -DMI_WIN_INIT_USE_RAW_DLLMAIN=ON \
 
     - name: Build
