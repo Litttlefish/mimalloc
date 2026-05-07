@@ -3,7 +3,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: MSBuild
+name: ZigBuild
 
 on:
   #push:
@@ -36,7 +36,7 @@ jobs:
         matrix:
           configuration: ["x86_64-windows-gnu", "x86-windows-gnu"]
           # configuration: [x64, x86]
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
 
