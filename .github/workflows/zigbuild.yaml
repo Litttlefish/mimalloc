@@ -63,11 +63,6 @@ jobs:
       with:
         zig-version: 0.16.0
 
-    - name: Configure with env
-      run: |
-        export CC="zig cc -target ${{ matrix.configuration }}"
-        export CXX="zig c++ -target ${{ matrix.configuration }}"
-
     # - name: Restore NuGet packages
     #   working-directory: ${{env.GITHUB_WORKSPACE}}
     #   run: nuget restore ${{env.SOLUTION_FILE_PATH}}
@@ -75,6 +70,8 @@ jobs:
     - name: Configure mimalloc (CMake)
       shell: bash
       run: |
+        export CC="zig cc -target ${{ matrix.configuration }}"
+        export CXX="zig c++ -target ${{ matrix.configuration }}"
         cmake -B build \
           -G "Ninja" \
           -A ${{matrix.configuration}} \
