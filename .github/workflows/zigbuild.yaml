@@ -1,0 +1,105 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: MSBuild
+
+on:
+  #push:
+    #branches: [ "main" ]
+  #pull_request:
+    #branches: [ "main" ]
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      tag_name:
+        description: 'the tag(version) of the mimalloc'
+        required: true
+
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: ./build/libmimalloc.sln
+  RESTORE_FILE_PATH: ./build/mimalloc.sln
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+        matrix:
+          configuration: [x64, Win32]
+          # configuration: [x64, x86]
+    runs-on: windows-latest
+
+    steps:
+
+    - name: 获得 Release 的 Body 与仓库名称
+      id: get-content
+      shell: bash
+      run: |
+        body=$(curl -s https://api.github.com/repos/microsoft/mimalloc/releases/tags/${{ github.event.inputs.tag_name }} | jq -r '.body')
+        echo "body-content=$(echo $body)" >> $GITHUB_OUTPUT 
+        echo $body
+        GITHUB_REPOSITORY="${{ github.repository }}"
+        REPO_NAME="${GITHUB_REPOSITORY#${{ github.repository_owner }}/}"
+        echo "repo-name=$(echo $REPO_NAME)" >> $GITHUB_OUTPUT 
+        echo $REPO_NAME
+        
+    - uses: actions/checkout@v6
+      with:
+        repository: 'microsoft/mimalloc'
+        submodules: 'recursive'
+        ref: ${{ github.event.inputs.tag_name }}
+
+    - name: Add zig to PATH
+      uses: korandoru/setup-zig@v1.4.0
+      with:
+        zig-version: 0.16.0
+
+    # - name: Restore NuGet packages
+    #   working-directory: ${{env.GITHUB_WORKSPACE}}
+    #   run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+      
+    - name: Configure mimalloc (CMake)
+      shell: bash
+      run: |
+        cmake -B build \
+          -G "Ninja" \
+          -A ${{matrix.configuration}} \
+          -DCMAKE_C_FLAGS="-Wall -Wno-date-time -flto=full -O3 -fomit-frame-pointer -funroll-loops -fno-strict-aliasing -fwrapv -fmerge-all-constants -fvisibility=hidden" \
+          -DMI_OPT_ARCH=ON \
+          -DMI_OPT_SIMD=ON \
+          -DMI_XMALLOC=OFF \
+          -DMI_BUILD_OBJECT=OFF \
+          -DMI_BUILD_TESTS=OFF \
+          -DMI_BUILD_STATIC=OFF \
+          -DMI_SKIP_COLLECT_ON_EXIT=ON \
+          -DMI_WIN_INIT_USE_RAW_DLLMAIN=ON \
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      # Add additional options to the MSBuild command line here (like platform or verbosity level).
+      # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
+      run: cmake --build build --config ${{env.BUILD_CONFIGURATION}}
+      # run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{matrix.configuration}} ${{env.SOLUTION_FILE_PATH}}
+      
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: compiles-${{matrix.configuration}}
+        path: build/*
+        retention-days: 3
+
+    - name: Upload to release
+      uses: ncipollo/release-action@v1.20.0 # cspell:disable-line
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        allowUpdates: true
+        artifacts: "out/*/*/*.*"
