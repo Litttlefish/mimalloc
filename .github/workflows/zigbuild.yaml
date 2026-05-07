@@ -73,7 +73,6 @@ jobs:
         export CC="zig cc -target ${{ matrix.configuration }}"
         export CXX="zig c++ -target ${{ matrix.configuration }}"
         cmake -B build \
-          -G "Ninja" \
           -A ${{matrix.configuration}} \
           -DCMAKE_C_FLAGS="-Wall -Wno-date-time -flto=full -O3 -fomit-frame-pointer -funroll-loops -fno-strict-aliasing -fwrapv -fmerge-all-constants -fvisibility=hidden" \
           -DMI_OPT_ARCH=ON \
