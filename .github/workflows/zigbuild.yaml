@@ -34,9 +34,9 @@ jobs:
   build:
     strategy:
         matrix:
-          configuration: ["x86_64-windows-gnu", "x86-windows-gnu"]
+          configuration: ["x86_64-windows-msvc", "x86-windows-msvc"]
           # configuration: [x64, x86]
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
 
@@ -70,8 +70,8 @@ jobs:
     - name: Configure mimalloc (CMake)
       shell: bash
       run: |
-        export CC="zig cc -target ${{ matrix.configuration }}"
-        export CXX="zig c++ -target ${{ matrix.configuration }}"
+        export CC="zig cc -target ${{ matrix.configuration }} -lmingw32 -lmingwex -lmsvcrt"
+        export CXX="zig c++ -target ${{ matrix.configuration }} -lmingw32 -lmingwex -lmsvcrt"
         cmake -B build \
           -DCMAKE_C_FLAGS="-Wall -Wno-date-time -flto=full -O3 -fomit-frame-pointer -funroll-loops -fno-strict-aliasing -fwrapv -fmerge-all-constants -fvisibility=hidden" \
           -DMI_OPT_ARCH=ON \
