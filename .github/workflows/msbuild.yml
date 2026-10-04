@@ -74,12 +74,12 @@ jobs:
           -DCMAKE_C_FLAGS="/O2 /Ob2 /Oi /Oy /Gy /GL /GT /Zc:inline" \
           -DMI_OPT_ARCH=ON \
           -DMI_OPT_SIMD=ON \
-          -DMI_XMALLOC=OFF \
           -DMI_BUILD_OBJECT=OFF \
           -DMI_BUILD_TESTS=OFF \
           -DMI_BUILD_STATIC=OFF \
           -DMI_SKIP_COLLECT_ON_EXIT=ON \
-          -DMI_WIN_INIT_USE_RAW_DLLMAIN=ON \
+          -DMI_WIN_INIT=RAW_DLLMAIN \
+          -DMI_TLS_MODEL=WIN32 \
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
