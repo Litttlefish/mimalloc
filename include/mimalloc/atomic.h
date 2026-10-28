@@ -211,11 +211,6 @@ static inline uintptr_t mi_atomic_exchange_explicit(_Atomic(uintptr_t)*p, uintpt
   (void)(mo);
   return (uintptr_t)MI_MSC_64(_InterlockedExchange)((volatile msc_intptr_t*)p, (msc_intptr_t)exchange);
 }
-static inline void mi_atomic_thread_fence(mi_memory_order mo) {
-  (void)(mo);
-  _Atomic(uintptr_t) x = 0;
-  mi_atomic_exchange_explicit(&x, 1, mo);
-}
 
 static inline uintptr_t mi_atomic_load_explicit(_Atomic(uintptr_t) const* p, mi_memory_order mo) {
   (void)(mo);
@@ -330,18 +325,18 @@ static inline void mi_atomic_void_addi64_relaxed(volatile int64_t* p, const vola
   }
 }
 
-static inline void mi_atomic_maxi64_relaxed(volatile _Atomic(int64_t)*p, int64_t x) {
+static inline void mi_atomic_maxi64_relaxed(volatile _Atomic(int64_t)* p, int64_t x) {
   int64_t current;
   do {
     current = *p;
   } while (current < x && _InterlockedCompareExchange64(p, x, current) != current);
 }
 
-static inline void mi_atomic_addi64_acq_rel(volatile _Atomic(int64_t*)p, int64_t i) {
+static inline void mi_atomic_addi64_acq_rel(volatile _Atomic(int64_t)* p, int64_t i) {
   mi_atomic_addi64_relaxed(p, i);
 }
 
-static inline bool mi_atomic_casi64_strong_acq_rel(volatile _Atomic(int64_t*)p, int64_t* exp, int64_t des) {
+static inline bool mi_atomic_casi64_strong_acq_rel(volatile _Atomic(int64_t)* p, int64_t* exp, int64_t des) {
   const int64_t read = _InterlockedCompareExchange64(p, des, *exp);
   if (read == *exp) {
     return true;
@@ -416,7 +411,8 @@ static inline void mi_atomic_yield(void) {
 #elif (defined(__GNUC__) || defined(__clang__)) && \
       (defined(__x86_64__) || defined(__i386__) || \
        defined(__aarch64__) || defined(__arm__) || \
-       defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) || defined(__POWERPC__))
+       defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) || defined(__POWERPC__) || \
+       defined(__riscv))
 #if defined(__x86_64__) || defined(__i386__)
 static inline void mi_atomic_yield(void) {
   __asm__ volatile ("pause" ::: "memory");
@@ -445,6 +441,16 @@ static inline void mi_atomic_yield(void) {
   __asm__ __volatile__ ("or 27,27,27" ::: "memory");
 }
 #endif
+#elif defined(__riscv)
+#if defined(__riscv_zihintpause)
+static inline void mi_atomic_yield(void) {
+  __asm__ volatile("pause" ::: "memory");
+}
+#else
+static inline void mi_atomic_yield(void) {
+  __asm__ volatile("nop" ::: "memory");
+}
+#endif
 #endif
 #elif defined(__sun)
 #include <synch.h>
@@ -469,6 +475,32 @@ static inline void mi_atomic_yield(void) {
 }
 #endif
 
+#if defined(_WIN32)
+static inline void mi_sleep0(void) {
+  Sleep(0);
+}
+#else
+#include <unistd.h>
+static inline void mi_sleep0(void) {
+  sleep(0);
+}
+#endif
+
+static inline void mi_atomic_yield_sleep( size_t* ticks, const size_t ticks_until_sleep ) {
+  const size_t n = *ticks;
+  if (n==0 || n > ticks_until_sleep) {
+    *ticks = ticks_until_sleep; // reset
+  }
+  else {
+    *ticks = n-1;    
+  }
+  if (n>1) {
+    mi_atomic_yield();
+  }
+  else {
+    mi_sleep0();
+  }
+}
 
 // ----------------------------------------------------------------------
 // Locks
@@ -589,9 +621,10 @@ static inline bool mi_lock_try_acquire(mi_lock_t* lock) {
   return mi_atomic_cas_strong_acq_rel(&lock->mutex, &expected, (uintptr_t)1);
 }
 static inline void mi_lock_acquire(mi_lock_t* lock) {
+  size_t ticks = 0;
   for (int i = 0; i < 10000; i++) {  // for at most 10000 tries?
     if (mi_lock_try_acquire(lock)) return;
-    mi_atomic_yield();
+    mi_atomic_yield_sleep(&ticks,100);
   }
   _mi_error_message(EFAULT, "internal error: lock cannot be acquired (due to lack of native lock primitives)\n");
 }
